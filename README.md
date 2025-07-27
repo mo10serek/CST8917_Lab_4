@@ -156,4 +156,8 @@ If you want to make edits of it, copy the entire json file and patse it in the C
 
 To get the output is to go to team in your account and you will see a new chat added which is called "Workflows". If the value "isInteresting" is falses, then it will send out a "Trip Analyzed - No Issues" card. If the value "isInteresting" is true and the payment type is 2 and the distance bellow 1, then it will send out a "Suspicious Vendor Activity Detected" card. If the value "isInteresting" is true and the payment type is 1 and the distance above 1, then  it will send out an "Interesting Trip Detected". From the example input above, it will return a "Trip Analyzed - No Issues" card like this
 
-https://youtu.be/bkZFVowx--A
+## Insights
+
+This lab help me to understand better on how to make workflow apps and get more practive on developing different workflow apps. It also teach me how it able to connect to different azure resorces such as Event Hub and Azure functions and how to work with them in the Azure App Workflow. I also learn different actions in such as sending post cards to spesific users. 
+
+[demo](https://youtu.be/bkZFVowx--A)
