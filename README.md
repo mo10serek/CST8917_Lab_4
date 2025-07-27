@@ -39,11 +39,90 @@ Create your Function App and pick the Flex Consumption plan.
 - **Runtime stack:** Python
 - **Version:** 3.10
 
-After that create and generate the resoruce. 
+After that create and generate the resoruce. Open up the Azure function and paset the function that is shown in Azure Function logic section.
+
+## Azure Logic App steps
+
+The Azure Logic App workflow begins with the "When events are available in Event Hub" trigger, which activates whenever a new event is published to the configured Event Hub resource.
+
+If the action is triggered, the workflow calls the Azure Function, passing the JSON payload from the Event Hub to process the trip data. The function returns an array of trips with insights, which are then iterated over using a For each loop. 
+
+Within this loop, a condition checks whether the current trip is marked as interesting by evaluating item()?['isInteresting']. If the condition is false, a post card is sent indicating that the trip was analyzed but has no issues. 
+
+If the condition is true, another condition checks whether the trip is suspicious by evaluating contains(items('For_each')?['insights'], 'SuspiciousVendorActivity'). If this condition is true, a post card is sent stating that the trip is suspicious; otherwise, a post card is sent to indicate that the trip is interesting but not suspicious.
+
+## Azure Function logic
+
+The Function app we have in this lab is displayed bellow:
+
+import azure.functions as func
+import logging
+import json
+
+app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
+@app.route(route="")
+def analyze_trip(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        input_data = req.get_json()
+        trips = input_data if isinstance(input_data, list) else [input_data]
+
+        results = []
+
+        for record in trips:
+            trip = record.get("ContentData", {})  # ✅ Extract inner trip data
+
+            vendor = trip.get("vendorID")
+            distance = float(trip.get("tripDistance", 0))
+            passenger_count = int(trip.get("passengerCount", 0))
+            payment = str(trip.get("paymentType"))  # Cast to string to match logic
+
+            insights = []
+
+            if distance > 10:
+                insights.append("LongTrip")
+            if passenger_count > 4:
+                insights.append("GroupRide")
+            if payment == "2":
+                insights.append("CashPayment")
+            if payment == "2" and distance < 1:
+                insights.append("SuspiciousVendorActivity")
+
+            results.append({
+                "vendorID": vendor,
+                "tripDistance": distance,
+                "passengerCount": passenger_count,
+                "paymentType": payment,
+                "insights": insights,
+                "isInteresting": bool(insights),
+                "summary": f"{len(insights)} flags: {', '.join(insights)}" if insights else "Trip normal"
+            })
+
+        return func.HttpResponse(
+            body=json.dumps(results),
+            status_code=200,
+            mimetype="application/json"
+        )
+
+    except Exception as e:
+        logging.error(f"Error processing trip data: {e}")
+        return func.HttpResponse(f"Error: {str(e)}", status_code=400)
+
+This Azure Function is an HTTP-triggered function that processes trip data and returns insights for each trip in JSON format. The function follows a request-response pattern: it accepts JSON input via an HTTP request, analyzes the trip data, and responds with a structured result.
+
+- Lines 10–13: The function retrieves the request body as JSON object. If the input is a single trip, it wraps it into a list to ensure consistent iteration over trip records.
+
+- Lines 16–21: For each trip record, it extracts the trip details from the "ContentData" field. It then retrieves specific attributes such as vendorID, tripDistance, passengerCount, and paymentType.
+
+- Lines 23–32: Based on the trip attributes, the function adds relevant "insight" tags (e.g., "LongTrip", "GroupRide", "CashPayment", "SuspiciousVendorActivity") to the insights list.
+
+- Lines 34–42: A result object is created for each trip, containing the trip data, insights, a boolean flag isInteresting (true if any insights are detected), and a summary message.
+
+- Lines 44–48: After processing all trips, the function returns an HTTP response (func.HttpResponse) containing the results list in JSON format with a 200 status code.
 
 ## Input and output
 
-In order to input to the arcitecture is to goto Date Explore section in the event hub you made and this is where you able to test your event hub by sending example events. When sending events, click Send events and click Yello taxi in selecting the dataset. There they give you a json file to test with. The example of the json file is displayed bellow
+In order to input to the arcitecture is to goto Date Explore section in the event hub you made and this is where you able to test your event hub by sending example events. When sending events, click Send events and click Yellow taxi in selecting the dataset. There they give you a json file to test with. The example of the json file is displayed bellow
 
 ### Input
 
@@ -52,7 +131,7 @@ In order to input to the arcitecture is to goto Date Explore section in the even
     "tpepPickupDateTime": 1528119858000,
     "tpepDropoffDateTime": 1528121148000,
     "passengerCount": 2,
-    **"tripDistance": 8.36,**
+    **"tripDistance": 0.87,**
     "puLocationId": "186",
     "doLocationId": "230",
     "startLon": null,
@@ -75,167 +154,6 @@ If you want to make edits of it, copy the entire json file and patse it in the C
 
 ### Output
 
-To get the output is to go to team in your account and you will see a new chat added which is called "Workflows". If the value "isInteresting" is falses, then it will send out a "Trip Analyzed - No Issues" card. If the value "isInteresting" is true and the payment type is 2 and the distance bellow 1, then it will send out a "Suspicious Vendor Activity Detected" card. If the value "isInteresting" is true and the payment type is 1 and the distance above 1, then  it will send out an "Interesting Trip Detected".
+To get the output is to go to team in your account and you will see a new chat added which is called "Workflows". If the value "isInteresting" is falses, then it will send out a "Trip Analyzed - No Issues" card. If the value "isInteresting" is true and the payment type is 2 and the distance bellow 1, then it will send out a "Suspicious Vendor Activity Detected" card. If the value "isInteresting" is true and the payment type is 1 and the distance above 1, then  it will send out an "Interesting Trip Detected". From the example input above, it will return a "Trip Analyzed - No Issues" card like this
 
-{
-    "definition": {
-        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
-        "contentVersion": "1.0.0.0",
-        "triggers": {
-            "When_events_are_available_in_Event_Hub": {
-                "type": "ApiConnection",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['eventhubs']['connectionId']"
-                        }
-                    },
-                    "method": "get",
-                    "path": "/@{encodeURIComponent('yellotaxidrivereventhub')}/events/batch/head",
-                    "queries": {
-                        "contentType": "application/json",
-                        "consumerGroupName": "$Default",
-                        "maximumEventsCount": 10
-                    }
-                },
-                "recurrence": {
-                    "interval": 1,
-                    "frequency": "Minute"
-                }
-            }
-        },
-        "actions": {
-            "taxifunctionapp-analyze_trip": {
-                "type": "Function",
-                "inputs": {
-                    "body": "@triggerBody()",
-                    "function": {
-                        "id": "/subscriptions/3b36c431-a92e-4ac8-927b-17a0f4b30054/resourceGroups/cst8917-lab4/providers/Microsoft.Web/sites/taxifunctionapp/functions/analyze_trip"
-                    }
-                },
-                "runAfter": {}
-            },
-            "For_each": {
-                "type": "Foreach",
-                "foreach": "@body('taxifunctionapp-analyze_trip')",
-                "actions": {
-                    "Is_intresting": {
-                        "type": "If",
-                        "expression": {
-                            "and": [
-                                {
-                                    "equals": [
-                                        "@item()?['isInteresting']",
-                                        true
-                                    ]
-                                }
-                            ]
-                        },
-                        "actions": {
-                            "is_suspicious": {
-                                "type": "If",
-                                "expression": {
-                                    "and": [
-                                        {
-                                            "equals": [
-                                                "@contains(items('For_each')?['insights'],'SuspiciousVendorActivity')",
-                                                true
-                                            ]
-                                        }
-                                    ]
-                                },
-                                "actions": {
-                                    "send_that_the_post_card_is_suspicious": {
-                                        "type": "ApiConnection",
-                                        "inputs": {
-                                            "host": {
-                                                "connection": {
-                                                    "name": "@parameters('$connections')['teams']['connectionId']"
-                                                }
-                                            },
-                                            "method": "post",
-                                            "body": {
-                                                "recipient": "balc0022@algonquinlive.com",
-                                                "messageBody": "  {\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"⚠️ Suspicious Vendor Activity Detected\",\n      \"weight\": \"Bolder\",\n      \"size\": \"Large\",\n      \"color\": \"Attention\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\" },\n        { \"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\" },\n        { \"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\" },\n        { \"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\" },\n        { \"title\": \"Insights\", \"value\": \"@{join(items('For_each')?['insights'], ', ')}\" }\n      ]\n    }\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
-                                            },
-                                            "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
-                                        }
-                                    }
-                                },
-                                "else": {
-                                    "actions": {
-                                        "send_that_the_post_card_is_interesting": {
-                                            "type": "ApiConnection",
-                                            "inputs": {
-                                                "host": {
-                                                    "connection": {
-                                                        "name": "@parameters('$connections')['teams']['connectionId']"
-                                                    }
-                                                },
-                                                "method": "post",
-                                                "body": {
-                                                    "recipient": "balc0022@algonquinlive.com",
-                                                    "messageBody": "  {\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"🚨 Interesting Trip Detected\",\n      \"weight\": \"Bolder\",\n      \"size\": \"Large\",\n      \"color\": \"Attention\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\" },\n        { \"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\" },\n        { \"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\" },\n        { \"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\" },\n        { \"title\": \"Insights\", \"value\": \"@{join(items('For_each')?['insights'], ', ')}\" }\n      ]\n    }\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
-                                                },
-                                                "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        "else": {
-                            "actions": {
-                                "send_that_the_post_card_that_it_worked": {
-                                    "type": "ApiConnection",
-                                    "inputs": {
-                                        "host": {
-                                            "connection": {
-                                                "name": "@parameters('$connections')['teams']['connectionId']"
-                                            }
-                                        },
-                                        "method": "post",
-                                        "body": {
-                                            "recipient": "balc0022@algonquinlive.com",
-                                            "messageBody": "  {\n  \"type\": \"AdaptiveCard\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"✅ Trip Analyzed - No Issues\",\n      \"weight\": \"Bolder\",\n      \"size\": \"Large\",\n      \"color\": \"Good\"\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Vendor\", \"value\": \"@{items('For_each')?['vendorID']}\"},\n        { \"title\": \"Distance (mi)\", \"value\": \"@{items('For_each')?['tripDistance']}\"},\n        { \"title\": \"Passengers\", \"value\": \"@{items('For_each')?['passengerCount']}\"},\n        { \"title\": \"Payment\", \"value\": \"@{items('For_each')?['paymentType']}\"},\n        { \"title\": \"Summary\", \"value\": \"@{join(items('For_each')?['insights'], ', ')}\"}\n      ]\n    }\n  ],\n  \"actions\": [],\n  \"version\": \"1.2\"\n}"
-                                        },
-                                        "path": "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Chat with Flow bot')}"
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                "runAfter": {
-                    "taxifunctionapp-analyze_trip": [
-                        "Succeeded"
-                    ]
-                }
-            }
-        },
-        "outputs": {},
-        "parameters": {
-            "$connections": {
-                "type": "Object",
-                "defaultValue": {}
-            }
-        }
-    },
-    "parameters": {
-        "$connections": {
-            "type": "Object",
-            "value": {
-                "eventhubs": {
-                    "id": "/subscriptions/3b36c431-a92e-4ac8-927b-17a0f4b30054/providers/Microsoft.Web/locations/canadacentral/managedApis/eventhubs",
-                    "connectionId": "/subscriptions/3b36c431-a92e-4ac8-927b-17a0f4b30054/resourceGroups/cst8917-lab4/providers/Microsoft.Web/connections/eventhubs",
-                    "connectionName": "eventhubs"
-                },
-                "teams": {
-                    "id": "/subscriptions/3b36c431-a92e-4ac8-927b-17a0f4b30054/providers/Microsoft.Web/locations/canadacentral/managedApis/teams",
-                    "connectionId": "/subscriptions/3b36c431-a92e-4ac8-927b-17a0f4b30054/resourceGroups/cst8917-lab4/providers/Microsoft.Web/connections/teams",
-                    "connectionName": "teams"
-                }
-            }
-        }
-    }
-}
+https://youtu.be/bkZFVowx--A
