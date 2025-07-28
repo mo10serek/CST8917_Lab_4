@@ -131,7 +131,7 @@ In order to input to the arcitecture is to goto Date Explore section in the even
     "tpepPickupDateTime": 1528119858000,
     "tpepDropoffDateTime": 1528121148000,
     "passengerCount": 2,
-    **"tripDistance": 0.87,**
+    **"tripDistance": 8.36,**
     "puLocationId": "186",
     "doLocationId": "230",
     "startLon": null,
@@ -140,7 +140,7 @@ In order to input to the arcitecture is to goto Date Explore section in the even
     "endLat": null,
     "rateCodeId": 1,
     "storeAndFwdFlag": "N",
-    **"paymentType": 1,**
+    **"paymentType": 2,**
     "fareAmount": 13.5,
     "extra": 0,
     "mtaTax": 0.5,
@@ -154,7 +154,9 @@ If you want to make edits of it, copy the entire json file and patse it in the C
 
 ### Output
 
-To get the output is to go to team in your account and you will see a new chat added which is called "Workflows". If the value "isInteresting" is falses, then it will send out a "Trip Analyzed - No Issues" card. If the value "isInteresting" is true and the payment type is 2 and the distance bellow 1, then it will send out a "Suspicious Vendor Activity Detected" card. If the value "isInteresting" is true and the payment type is 1 and the distance above 1, then  it will send out an "Interesting Trip Detected". From the example input above, it will return a "Trip Analyzed - No Issues" card like this
+To get the output is to go to team in your account and you will see a new chat added which is called "Workflows". If the value "isInteresting" is falses, then it will send out a "Trip Analyzed - No Issues" card. If the value "isInteresting" is true and the payment type is 2 and the distance bellow 1, then it will send out a "Suspicious Vendor Activity Detected" card. If the value "isInteresting" is true and the payment type is 1 and the distance above 1, then  it will send out an "Interesting Trip Detected". From the example input above, it will return a "Trip Analyzed - No Issues" card like this:
+
+![output](Input.PNG)
 
 ## Insights
 
